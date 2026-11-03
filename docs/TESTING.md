@@ -2,9 +2,9 @@
 
 ## Mac版の追加検証
 
-Mac版は共通Coreのパケット境界検証を17件追加し、Coreテストは46件です。Mac専用のUI・子プロセス通信テスト11件を `tests/DAMeter.Mac.Tests` に用意しています。音声ヘルパーにも、実際のPCM変換を対象とする権限不要の `--self-test` 9件を用意しています。
+Mac版は共通Coreのパケット境界検証を17件追加し、Coreテストは46件です。Mac専用のUI・子プロセス通信テスト11件と合わせ、Linuxで57件すべて成功、失敗0・スキップ0を確認しました。音声ヘルパーの権限不要のPCM変換セルフテスト9件も、Apple Silicon / Intelの両macOSランナーで成功しました。
 
-LinuxではWindows・Mac・両テストプロジェクトを含むソリューションをReleaseでビルドし、警告0・エラー0を確認しています。Apple Silicon / Intel の自己完結型 .NET アプリのクロス発行も成功しています。Swift、`.app`の組み立て・署名検証、3種類の描画を通る起動チェックはmacOS CIで実行します。最新結果はGitHub Actionsの **Build macOS** で確認してください。
+LinuxではWindows・Mac・両テストプロジェクトを含むソリューションをReleaseでビルドし、警告0・エラー0を確認しています。コミット `b5544b0` の [Mac CI](https://github.com/atstti/codex/actions/runs/41603225132) は両CPUで成功しました。共通・Macテスト、Swiftコンパイル、`.app`の署名検証、3種類の描画を通る起動チェック、ZIP/DMG生成を実行しています。同じコミットの [Windows CI](https://github.com/atstti/codex/actions/runs/41603225173) も成功しました。
 
 MacのUI・音声パイプの自動テストは実デバイスを使いません。画面収録権限の許可・拒否、実際のシステム音声、クリック透過からの復帰、Retina／モニター切断は実機での受け入れ確認が必要です。Mac用の詳細は [MACOS.md](MACOS.md) を参照してください。
 
@@ -16,9 +16,9 @@ MacのUI・音声パイプの自動テストは実デバイスを使いません
 dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration Release --logger 'console;verbosity=normal'
 ```
 
-結果: **29 成功、0 失敗、0 スキップ**。テスト対象は `DAMeter.Core` です。WPF のウィンドウや NAudio の実デバイスを起動した結果ではありません。
+結果: **46 成功、0 失敗、0 スキップ**。テスト対象は `DAMeter.Core` です。WPF のウィンドウや NAudio の実デバイスを起動した結果ではありません。
 
-WPF を含むソリューションの Release ビルドも成功し、警告 0・エラー 0 でした。`dotnet publish` による Windows x64 自己完結型の単一 exe の生成に成功し、PE32+ x86-64 Windows GUI 実行ファイルであることを確認しました。Windows での起動や WASAPI の検証を意味する結果ではありません。PowerShell 発行スクリプトと GitHub Actions ワークフローは未実行です。
+WPF を含むソリューションの Release ビルドも成功し、警告 0・エラー 0 でした。`dotnet publish` による Windows x64 自己完結型の単一 exe の生成に成功し、PE32+ x86-64 Windows GUI 実行ファイルであることを確認しました。Windows CIでもPowerShell発行スクリプトとArtifacts生成が成功しています。WindowsでのUI起動やWASAPI取得の手動検証は未実施です。
 
 | 分類 | 検証内容 | 結果 |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ WPF を含むソリューションの Release ビルドも成功し、警告 0�
 | チャンネル | ステレオの独立 peak/RMS、mono の複製、4ch の先頭 L/R | 成功 |
 | 入力の境界 | 空入力、デジタル無音、不完全末尾フレームの無視 | 成功 |
 | 不正形式 | 未対応ビット幅・符号化、無効または巨大なチャンネル数の明示的拒否 | 成功 |
+| Mac音声パケット | 分割読み取り・フレーム境界・4MiB上限・不正長・途中切断・キャンセル・Float32の共通解析への受け渡し（17件） | 成功 |
 | dBFS | 振幅 0 の負の無限大、振幅 1 / 0.5 / 0.1 の既知値 | 成功 |
 | ピーク応答 | 即時アタック、経過時間に従う減衰、ホールドとクリップの維持・解除 | 成功 |
 | VU 応答 | 緩やかな立ち上がり、基準レベルでの定常値、30 / 120fps 間の応答比較 | 成功 |

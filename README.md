@@ -84,7 +84,7 @@ dotnet publish src/DAMeter/DAMeter.csproj --configuration Release --runtime win-
 
 通常の依存関係は `packages.lock.json`、単一 exe 発行時に追加される SDK タスクと runtime 固有の依存関係は `packages.publish.lock.json` に固定しています。通常の復元には `--locked-mode`、上記の発行には `-p:RestoreLockedMode=true` を追加して固定内容を検証できます。
 
-Windows の PowerShell では `./scripts/publish.ps1` で、圧縮した exe、README、検証記録、依存ソフトウェアのライセンス、SHA-256 をまとめた `artifacts/DAMeter-win-x64.zip` を作成できます。このスクリプト自体の PowerShell 上での実行は未検証です。上記の `dotnet publish` と同じ発行処理は Linux で成功し、Windows x64 の自己完結型 exe を生成しています。
+Windows の PowerShell では `./scripts/publish.ps1` で、圧縮した exe、README、検証記録、依存ソフトウェアのライセンス、SHA-256 をまとめた `artifacts/DAMeter-win-x64.zip` を作成できます。Windows CIでこのPowerShellスクリプトとArtifacts生成の成功を確認しました。Linuxからのクロス発行にも成功しています。
 
 ## Linux クラウド環境
 
@@ -119,4 +119,4 @@ dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration R
 | `src/DAMeter/Platform` | トレイ、クリック透過、モニターとウィンドウ位置 |
 | `tests/DAMeter.Core.Tests` | xUnit による数値処理と設定保存の検証 |
 
-Linux / .NET SDK 10.0.403 で **29 テスト成功、失敗 0、スキップ 0** を確認しています。Windows での手動確認と CI は未実行です。詳細と受け入れチェックリストは [docs/TESTING.md](docs/TESTING.md) を参照してください。
+Linux / .NET SDK 10.0.403 で **Core 46件・Mac UI/通信11件、計57件成功、失敗0・スキップ0** を確認しました。Windowsと両Mac CPUのCIビルド・配布物生成、Macの権限不要の音声変換セルフテストと起動チェックも成功しています。実音声と手動操作の受け入れ確認は未実施です。詳細と受け入れチェックリストは [docs/TESTING.md](docs/TESTING.md) を参照してください。
