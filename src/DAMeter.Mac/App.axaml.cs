@@ -26,13 +26,14 @@ public partial class App : Application
             // macOS Command+Q and Dock Quit first request application shutdown,
             // then close its windows. A tray-style window must not cancel this
             // request as though the user had only closed the meter window.
-            desktop.ShutdownRequested += (_, args) =>
+            desktop.ShutdownRequested += (_, _) =>
             {
                 if (window.IsShutdownPrepared) return;
-                // Keep the main event loop alive while the in-process capture
-                // stops, then complete shutdown without blocking the UI thread.
-                args.Cancel = true;
-                window.Exit();
+                // Avalonia does not distinguish Dock Quit from logout here.
+                // Canceling the request can cancel the entire OS logout, so
+                // request nonblocking cleanup and let native termination proceed.
+                // Our own Quit menu uses Exit() for awaited audio cleanup.
+                window.PrepareForNativeShutdown();
             };
             if (!Program.SmokeTest || OperatingSystem.IsMacOS())
             {

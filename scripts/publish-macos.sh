@@ -50,7 +50,8 @@ dotnet publish src/DAMeter.Mac/DAMeter.Mac.csproj \
 
 xcrun swiftc -emit-library -parse-as-library -swift-version 5 -O \
     -target "$swift_target" \
-    -module-name DAMeterAudio -install_name @rpath/libDAMeterAudio.dylib \
+    -module-name DAMeterAudio \
+    -Xlinker -install_name -Xlinker '@rpath/libDAMeterAudio.dylib' \
     -framework ScreenCaptureKit -framework CoreMedia -framework AudioToolbox \
     native/Shared/AudioPCM.swift native/DAMeter.AudioBridge/AudioBridge.swift \
     -o "$audio_library"

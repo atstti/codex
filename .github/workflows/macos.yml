@@ -36,7 +36,7 @@ jobs:
         run: dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=core-tests.trx' --results-directory artifacts/test-results
       - name: Restore Mac UI and transport tests
         run: dotnet restore tests/DAMeter.Mac.Tests/DAMeter.Mac.Tests.csproj --locked-mode
-      - name: Test Mac UI bindings and helper lifecycle
+      - name: Test Mac UI bindings and audio lifecycle
         run: dotnet test tests/DAMeter.Mac.Tests/DAMeter.Mac.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=mac-tests.trx' --results-directory artifacts/test-results
       - name: Publish, verify signatures, and smoke test Mac application
         run: |

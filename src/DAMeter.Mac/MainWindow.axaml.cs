@@ -81,8 +81,7 @@ public partial class MainWindow : Window
             if (exiting) return;
             if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown)
             {
-                e.Cancel = true;
-                Exit();
+                PrepareForNativeShutdown();
                 return;
             }
             if (HasRecoveryIcon) { e.Cancel = true; HideSafely(); }
@@ -263,6 +262,14 @@ public partial class MainWindow : Window
     private void MinimizeWindow(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void ExitApplication(object? sender, RoutedEventArgs e) => Exit();
     public void Exit() => ExitWithCode(0);
+    public void PrepareForNativeShutdown()
+    {
+        // No wait or cancellation inside native termination callbacks. In
+        // particular, macOS logout must continue even if consent is pending.
+        shutdownRequested = true;
+        ViewModel.Dispose();
+        PrepareForShutdown();
+    }
     public void PrepareForShutdown()
     {
         if (exiting) return;

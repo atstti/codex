@@ -9,6 +9,41 @@ namespace DAMeter.Mac.Tests;
 public sealed class InProcessShutdownTests
 {
     [AvaloniaFact]
+    public async Task NativeTerminationDoesNotWaitForDelayedAudioStop()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"dameter-native-termination-{Guid.NewGuid():N}");
+        var bridge = new WaitingBridge();
+        using var audio = new NativeMacAudioService(bridge: bridge, shutdownTimeout: TimeSpan.FromSeconds(5));
+        var window = new MainWindow(new SettingsStore(directory), new AppSettings(), smokeTest: true, audio: audio);
+        bool closed = false;
+        window.Closed += (_, _) => closed = true;
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.ViewModel.Start();
+            await bridge.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            window.PrepareForNativeShutdown();
+            window.Close();
+
+            Assert.True(closed);
+            Assert.True(window.IsShutdownPrepared);
+            Assert.Equal(0, bridge.Releases);
+            await bridge.StopRequested.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            bridge.CompleteStop();
+            Assert.Equal(1, bridge.Releases);
+        }
+        finally
+        {
+            bridge.CompleteStop();
+            window.PrepareForShutdown();
+            window.Close();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task QuitKeepsTheUiAliveUntilNativeCaptureHasStopped()
     {
         string directory = Path.Combine(Path.GetTempPath(), $"dameter-native-quit-{Guid.NewGuid():N}");
