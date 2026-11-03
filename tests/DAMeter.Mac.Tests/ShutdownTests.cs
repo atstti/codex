@@ -28,7 +28,7 @@ public sealed class ShutdownTests
     [AvaloniaTheory]
     [InlineData(WindowCloseReason.ApplicationShutdown)]
     [InlineData(WindowCloseReason.OSShutdown)]
-    public void ApplicationAndSystemQuitDoNotHideOrCancelShutdown(WindowCloseReason reason)
+    public void ApplicationAndSystemQuitFinishAfterAudioCleanup(WindowCloseReason reason)
     {
         using var fixture = new WindowFixture();
         bool closed = false;
@@ -36,7 +36,9 @@ public sealed class ShutdownTests
 
         bool canceled = RequestNativeClose(fixture.Window, reason);
 
-        Assert.False(canceled);
+        Assert.True(canceled);
+        Assert.True(fixture.Window.IsShutdownRequested);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(closed);
         Assert.False(fixture.Window.IsVisible);
     }

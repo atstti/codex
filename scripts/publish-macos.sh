@@ -30,12 +30,11 @@ output="$root/artifacts/macos-$rid"
 app="$output/DAMeter.app"
 macos="$app/Contents/MacOS"
 resources="$app/Contents/Resources"
-helper_app="$app/Contents/Helpers/DAMeter.AudioCapture.app"
-helper_macos="$helper_app/Contents/MacOS"
-helper="$helper_macos/DAMeter.AudioCapture"
+frameworks="$app/Contents/Frameworks"
+audio_library="$frameworks/libDAMeterAudio.dylib"
 # Delete only this script's own generated .app; unrelated artifacts are retained.
 rm -rf "$app"
-mkdir -p "$macos" "$resources" "$helper_macos" "$output"
+mkdir -p "$macos" "$resources" "$frameworks" "$output"
 temporary="$(mktemp -d "${TMPDIR:-/tmp}/dameter-publish.XXXXXX")"
 trap 'rm -rf "$temporary"' EXIT
 
@@ -49,35 +48,13 @@ dotnet publish src/DAMeter.Mac/DAMeter.Mac.csproj \
     -p:DebugType=None -p:DebugSymbols=false -p:RestoreLockedMode=true \
     --output "$macos"
 
-xcrun swiftc -parse-as-library -swift-version 5 -O \
+xcrun swiftc -emit-library -parse-as-library -swift-version 5 -O \
     -target "$swift_target" \
-    -framework ScreenCaptureKit -framework AVFoundation \
-    -framework CoreMedia -framework CoreAudio -framework AudioToolbox -framework CoreGraphics -framework AppKit \
-    native/DAMeter.AudioCapture/*.swift \
-    -o "$helper"
-chmod 755 "$macos/DAMeter.Mac" "$helper"
-
-# The capture agent must not inherit DAMeter.Mac's bundle identity or appear as
-# another regular application in the Dock. LSUIElement preserves permission
-# dialogs while the helper explicitly uses AppKit's accessory activation policy.
-cat > "$helper_app/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-    <key>CFBundleName</key><string>DAMeter Audio Capture</string>
-    <key>CFBundleDisplayName</key><string>DAMeter 音声取得</string>
-    <key>CFBundleIdentifier</key><string>org.atstti.DAMeter.AudioCapture</string>
-    <key>CFBundleExecutable</key><string>DAMeter.AudioCapture</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>0.1.2</string>
-    <key>CFBundleShortVersionString</key><string>0.1.2</string>
-    <key>LSMinimumSystemVersion</key><string>15.0</string>
-    <key>LSUIElement</key><true/>
-    <key>NSScreenCaptureUsageDescription</key><string>DAMeterでシステム音声のレベルを表示するために使用します。録画、録音、保存、送信は行いません。</string>
-    <key>NSAudioCaptureUsageDescription</key><string>再生中のシステム音声をDAMeterへ渡して解析します。マイクは使用しません。</string>
-</dict></plist>
-PLIST
-/usr/bin/plutil -lint "$helper_app/Contents/Info.plist"
+    -module-name DAMeterAudio -install_name @rpath/libDAMeterAudio.dylib \
+    -framework ScreenCaptureKit -framework CoreMedia -framework AudioToolbox \
+    native/Shared/AudioPCM.swift native/DAMeter.AudioBridge/AudioBridge.swift \
+    -o "$audio_library"
+chmod 755 "$macos/DAMeter.Mac" "$audio_library"
 
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -88,8 +65,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>org.atstti.DAMeter</string>
     <key>CFBundleExecutable</key><string>DAMeter.Mac</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>0.1.2</string>
-    <key>CFBundleShortVersionString</key><string>0.1.2</string>
+    <key>CFBundleVersion</key><string>0.1.3</string>
+    <key>CFBundleShortVersionString</key><string>0.1.3</string>
     <key>CFBundleIconFile</key><string>DAMeter.icns</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>NSHighResolutionCapable</key><true/>
@@ -152,28 +129,34 @@ cat > "$temporary/entitlements.plist" <<'PLIST'
 PLIST
 while IFS= read -r -d '' binary; do
     # The primary executable is signed together with its bundle after nested
-    # helpers; signing it first can make codesign inspect unsigned children.
+    # libraries; signing it first can make codesign inspect unsigned children.
     [[ "$binary" == "$macos/DAMeter.Mac" ]] && continue
     case "$(/usr/bin/file -b "$binary")" in
         *Mach-O*) /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$temporary/entitlements.plist" "$binary" ;;
     esac
 done < <(find "$macos" -type f -print0)
-# Seal the nested helper as a bundle first. The main bundle then records that
-# nested signature; signing the outer application first is insufficient.
-/usr/bin/codesign --force --sign - --timestamp=none "$helper_app"
-/usr/bin/codesign --verify --strict --verbose=2 "$helper_app"
+# The bridge runs inside DAMeter.Mac, so ScreenCaptureKit uses the main app's
+# identity and permission. Sign the nested library before sealing the app.
+/usr/bin/codesign --force --sign - --timestamp=none "$audio_library"
+/usr/bin/codesign --verify --strict --verbose=2 "$audio_library"
 /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$temporary/entitlements.plist" "$app"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
+/usr/bin/codesign --display --entitlements :- "$macos/DAMeter.Mac" > "$temporary/signed-entitlements.plist"
+python3 - "$temporary/signed-entitlements.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as source:
+    entitlements = plistlib.load(source)
+for name in ('com.apple.security.cs.allow-jit', 'com.apple.security.cs.allow-unsigned-executable-memory'):
+    if entitlements.get(name) is not True:
+        raise SystemExit(f'Missing .NET runtime entitlement: {name}')
+PY
 
-# --check never starts capture or requests Screen Recording permission.
+# The main process verifies the bridge without requesting capture permission.
 case "$rid:$(uname -m)" in
     osx-arm64:arm64|osx-x64:x86_64)
-        "$helper" --check
-        "$helper" --self-test
-        "$helper" --agent-check
         # Exercise Avalonia, its native libraries, and real window creation. The
-        # application skips capture/persistence, probes the agent through the
-        # production launcher, and requests normal Quit with the native tray active.
+        # application skips capture/persistence, loads the production bridge for
+        # identity/PCM checks, and requests Quit with the native tray active.
         python3 - "$macos/DAMeter.Mac" <<'PY'
 import os, subprocess, sys
 environment = os.environ.copy()
@@ -186,7 +169,7 @@ PY
 esac
 
 commit="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
-printf 'DAMeter %s\nSource: %s\n.NET SDK: %s\nSignature: ad-hoc, not notarized\nSystem audio / interactive UI acceptance: not performed by this script\n' \
+printf 'DAMeter 0.1.3 %s\nSource: %s\n.NET SDK: %s\nSignature: ad-hoc, not notarized\nSystem audio / interactive UI acceptance: not performed by this script\n' \
     "$rid" "$commit" "$(dotnet --version)" > "$output/BUILD-INFO.txt"
 cp docs/MACOS.md "$output/README-ja.md"
 cp THIRD-PARTY-NOTICES.txt "$output/"

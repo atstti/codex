@@ -11,22 +11,22 @@ namespace DAMeter.Mac.ViewModels;
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly SettingsStore store;
-    private readonly MacLoopbackAudioService audio;
+    private readonly NativeMacAudioService audio;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1.0 / 60) };
     private readonly Stopwatch clock = new();
     private readonly MeterBallistics ballistics = new();
     private double lastTime;
     private bool disposed;
     private string status = "システム音声を準備しています…";
-    public MainViewModel(SettingsStore store, AppSettings settings)
+    public MainViewModel(SettingsStore store, AppSettings settings, NativeMacAudioService? audio = null)
     {
         this.store = store;
         Settings = settings;
-        audio = new MacLoopbackAudioService(store.Log);
-        audio.StatusChanged += OnStatus;
+        this.audio = audio ?? new NativeMacAudioService(store.Log);
+        this.audio.StatusChanged += OnStatus;
         timer.Tick += Tick;
         SelectMeterCommand = new RelayCommand(p => { if (Enum.TryParse<MeterMode>(p?.ToString(), out var mode)) Meter = mode; });
-        RetryCommand = new RelayCommand(_ => audio.Retry());
+        RetryCommand = new RelayCommand(_ => this.audio.Retry());
         ToggleFloatingCommand = new RelayCommand(_ => Floating = !Floating);
         SettingsCommand = new RelayCommand(_ => OpenSettingsRequested?.Invoke());
         OpenPermissionsCommand = new RelayCommand(_ => OpenPermissionsRequested?.Invoke());
@@ -68,7 +68,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private void OnStatus(string message) => Dispatcher.UIThread.Post(() => { if (!disposed) Status = message; });
     public void Save() => store.Save(Settings);
-    public Task VerifyAgentAsync() => audio.VerifyAgentAsync();
+    public Task VerifyNativeAsync() => audio.VerifyNativeAsync();
+    public Task StopAudioAsync()
+    {
+        timer.Stop();
+        return audio.StopAsync();
+    }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     public void Dispose()
     {

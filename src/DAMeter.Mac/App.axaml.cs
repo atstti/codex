@@ -26,7 +26,14 @@ public partial class App : Application
             // macOS Command+Q and Dock Quit first request application shutdown,
             // then close its windows. A tray-style window must not cancel this
             // request as though the user had only closed the meter window.
-            desktop.ShutdownRequested += (_, _) => window.PrepareForShutdown();
+            desktop.ShutdownRequested += (_, args) =>
+            {
+                if (window.IsShutdownPrepared) return;
+                // Keep the main event loop alive while the in-process capture
+                // stops, then complete shutdown without blocking the UI thread.
+                args.Cancel = true;
+                window.Exit();
+            };
             if (!Program.SmokeTest || OperatingSystem.IsMacOS())
             {
                 var menu = new NativeMenu();

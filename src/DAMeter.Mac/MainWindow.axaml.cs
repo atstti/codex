@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using DAMeter.Core;
 using DAMeter.Mac.Platform;
 using DAMeter.Mac.ViewModels;
+using DAMeter.Mac.Audio;
 
 namespace DAMeter.Mac;
 
@@ -22,17 +23,22 @@ public partial class MainWindow : Window
     private bool applyingBounds;
     private bool opened;
     private bool exiting;
+    private bool shutdownRequested;
+    private readonly TaskCompletionSource shutdownCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public bool IsShutdownPrepared => exiting;
+    public bool IsShutdownRequested => shutdownRequested || exiting;
+    public Task ShutdownCompleted => shutdownCompletion.Task;
     public MainViewModel ViewModel { get; }
     protected virtual bool HasRecoveryIcon => tray?.IsAvailable == true;
 
     public MainWindow() : this(new SettingsStore(), new AppSettings(), Design.IsDesignMode) { }
 
-    public MainWindow(SettingsStore store, AppSettings settings, bool smokeTest = false)
+    public MainWindow(SettingsStore store, AppSettings settings, bool smokeTest = false, NativeMacAudioService? audio = null)
     {
         InitializeComponent();
         this.store = store;
         this.smokeTest = smokeTest;
-        ViewModel = new MainViewModel(store, settings);
+        ViewModel = new MainViewModel(store, settings, audio);
         DataContext = ViewModel;
         Icon = new WindowIcon(Avalonia.Platform.AssetLoader.Open(new Uri("avares://DAMeter.Mac/Assets/dameter.png")));
         ViewModel.FrameReady += (state, mode) => { if (IsVisible) Meter.Update(state, mode); };
@@ -61,7 +67,7 @@ public partial class MainWindow : Window
                 Meter.Update(new MeterBallistics(), ViewModel.Meter);
                 DispatcherTimer.RunOnce(() => Meter.Update(new MeterBallistics(), MeterMode.AnalogVu), TimeSpan.FromMilliseconds(200));
                 DispatcherTimer.RunOnce(() => Meter.Update(new MeterBallistics(), MeterMode.VerticalPeak), TimeSpan.FromMilliseconds(400));
-                if (Program.SmokeTest && OperatingSystem.IsMacOS()) _ = VerifyAgentAndExitAsync();
+                if (Program.SmokeTest && OperatingSystem.IsMacOS()) _ = VerifyNativeAndExitAsync();
                 else DispatcherTimer.RunOnce(Exit, TimeSpan.FromSeconds(1));
             }
             else
@@ -75,7 +81,8 @@ public partial class MainWindow : Window
             if (exiting) return;
             if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown)
             {
-                PrepareForShutdown();
+                e.Cancel = true;
+                Exit();
                 return;
             }
             if (HasRecoveryIcon) { e.Cancel = true; HideSafely(); }
@@ -83,11 +90,8 @@ public partial class MainWindow : Window
             {
                 // Let this close finish instead of recursively calling Close
                 // from inside Closing when no recovery icon is available.
-                PrepareForShutdown();
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown();
-                });
+                e.Cancel = true;
+                Exit();
             }
         };
         Closed += (_, _) =>
@@ -96,6 +100,7 @@ public partial class MainWindow : Window
             Screens.Changed -= ScreensChanged;
             tray?.Dispose();
             ViewModel.Dispose();
+            shutdownCompletion.TrySetResult();
         };
         PositionChanged += (_, _) => GeometryChanged();
         SizeChanged += (_, _) => GeometryChanged();
@@ -108,12 +113,12 @@ public partial class MainWindow : Window
         CaptureBounds();
         ScheduleSave();
     }
-    private async Task VerifyAgentAndExitAsync()
+    private async Task VerifyNativeAndExitAsync()
     {
         var exitCode = 0;
         try
         {
-            await ViewModel.VerifyAgentAsync().ConfigureAwait(false);
+            await ViewModel.VerifyNativeAsync().ConfigureAwait(false);
             await Task.Delay(1000).ConfigureAwait(false);
         }
         catch (Exception ex) { store.Log(ex); Console.Error.WriteLine(ex); exitCode = 1; }
@@ -123,7 +128,7 @@ public partial class MainWindow : Window
             {
                 // Exercise the same cancelable shutdown path as Dock Quit. In
                 // particular, the recovery icon must not turn Quit into Hide.
-                if (!desktop.TryShutdown())
+                if (!desktop.TryShutdown() && !IsShutdownRequested)
                 {
                     Console.Error.WriteLine("Native application shutdown was unexpectedly canceled.");
                     PrepareForShutdown();
@@ -266,8 +271,25 @@ public partial class MainWindow : Window
     }
     public void ExitWithCode(int exitCode)
     {
-        if (exiting) return;
-        PrepareForShutdown(); Close();
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown(exitCode);
+        if (exiting || shutdownRequested) return;
+        shutdownRequested = true;
+        // Defer past the native Quit/Closing callback to avoid reentrant closes.
+        Dispatcher.UIThread.Post(() => _ = ExitAfterAudioStopsAsync(exitCode));
+    }
+    private async Task ExitAfterAudioStopsAsync(int exitCode)
+    {
+        try
+        {
+            ViewModel.Status = "音声取得を停止して終了しています…";
+            await ViewModel.StopAudioAsync();
+        }
+        catch (Exception ex) { store.Log(ex); }
+        finally
+        {
+            PrepareForShutdown();
+            Close();
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown(exitCode);
+            shutdownCompletion.TrySetResult();
+        }
     }
 }
