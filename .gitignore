@@ -1,0 +1,16 @@
+# .NET build output
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+
+# Local IDE and user settings
+.vs/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db

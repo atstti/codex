@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DAMeter.Core/DAMeter.Core.csproj" />
+    <Project Path="src/DAMeter/DAMeter.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj" />
+  </Folder>
+</Solution>
