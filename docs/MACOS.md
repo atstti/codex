@@ -57,7 +57,7 @@ bash scripts/publish-macos.sh osx-arm64
 bash scripts/publish-macos.sh osx-x64
 ```
 
-生成先はそれぞれ `artifacts/macos-osx-arm64/`、`artifacts/macos-osx-x64/` です。`DAMeter.app/Contents/MacOS/` に .NET アプリ、必要なネイティブライブラリ、Swift音声ヘルパーを配置します。ヘルパーを使うため、開発中も配布スクリプトで組み立てた `.app` を起動してください。
+生成先はそれぞれ `artifacts/macos-osx-arm64/`、`artifacts/macos-osx-x64/` です。`DAMeter.app/Contents/MacOS/` に自己完結型の単一 .NET 実行ファイルとSwift音声ヘルパーを配置します。macOSの署名規則に合わせてマネージDLLをこのコード用ディレクトリへ直接配置せず、.NETの単一ファイル機能で組み込みます。ネイティブライブラリは実行時にユーザーの一時領域へ展開されます。ヘルパーを使うため、開発中も配布スクリプトで組み立てた `.app` を起動してください。
 
 スクリプトは Swift のコンパイル、ad-hoc署名、署名の整合性検証、権限不要のヘルパー `--check`、Avaloniaの実ウィンドウを開いて閉じる `--smoke-test`、ZIP・DMG・SHA-256生成を行います。スモークテストでは音声取得・トレイ・設定保存を開始しません。異なるCPU向けへのクロス発行時は実行確認を省略します。GitHub Actions はCPUに一致するmacOSランナーでそれぞれビルドします。
 

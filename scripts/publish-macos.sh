@@ -36,11 +36,13 @@ mkdir -p "$macos" "$resources" "$output"
 temporary="$(mktemp -d "${TMPDIR:-/tmp}/dameter-publish.XXXXXX")"
 trap 'rm -rf "$temporary"' EXIT
 
-# Bundling .NET's dylibs beside the apphost preserves their runtime lookup paths.
-# Ordinary Mac publish has a separate lock graph for each RID.
+# Contents/MacOS is reserved for native executables. A supported .NET single-file
+# publish keeps managed PE assemblies out of this directory so codesign does not
+# mistake them for unsigned nested code. Native runtime files self-extract.
 dotnet publish src/DAMeter.Mac/DAMeter.Mac.csproj \
     --configuration Release --runtime "$rid" --self-contained true \
-    -p:PublishSingleFile=false -p:PublishTrimmed=false \
+    -p:PublishSingleFile=true -p:PublishTrimmed=false \
+    -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
     -p:DebugType=None -p:DebugSymbols=false -p:RestoreLockedMode=true \
     --output "$macos"
 
@@ -124,6 +126,9 @@ cat > "$temporary/entitlements.plist" <<'PLIST'
 </dict></plist>
 PLIST
 while IFS= read -r -d '' binary; do
+    # The primary executable is signed together with its bundle after nested
+    # helpers; signing it first can make codesign inspect unsigned children.
+    [[ "$binary" == "$macos/DAMeter.Mac" ]] && continue
     case "$(/usr/bin/file -b "$binary")" in
         *Mach-O*) /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$temporary/entitlements.plist" "$binary" ;;
     esac
