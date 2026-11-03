@@ -15,6 +15,17 @@ namespace DAMeter.Mac.Tests;
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
+    public void ExitButtonClosesTheApplicationWindow()
+    {
+        using var fixture = new WindowFixture();
+        bool closed = false;
+        fixture.Window.Closed += (_, _) => closed = true;
+        Click(fixture.Window, FindButton(fixture.Window, "終了"));
+        Assert.True(closed);
+        Assert.False(fixture.Window.IsVisible);
+    }
+
+    [AvaloniaFact]
     public void MeterButtonsAreBoundAndSwitchTheSharedSettingThroughPointerInput()
     {
         using var fixture = new WindowFixture();

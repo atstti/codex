@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private bool opened;
     private bool exiting;
     public MainViewModel ViewModel { get; }
+    protected virtual bool HasRecoveryIcon => tray?.IsAvailable == true;
 
     public MainWindow() : this(new SettingsStore(), new AppSettings(), Design.IsDesignMode) { }
 
@@ -57,7 +58,8 @@ public partial class MainWindow : Window
                 Meter.Update(new MeterBallistics(), ViewModel.Meter);
                 DispatcherTimer.RunOnce(() => Meter.Update(new MeterBallistics(), MeterMode.AnalogVu), TimeSpan.FromMilliseconds(200));
                 DispatcherTimer.RunOnce(() => Meter.Update(new MeterBallistics(), MeterMode.VerticalPeak), TimeSpan.FromMilliseconds(400));
-                DispatcherTimer.RunOnce(Exit, TimeSpan.FromSeconds(1));
+                if (Program.SmokeTest && OperatingSystem.IsMacOS()) _ = VerifyAgentAndExitAsync();
+                else DispatcherTimer.RunOnce(Exit, TimeSpan.FromSeconds(1));
             }
             else
             {
@@ -68,13 +70,17 @@ public partial class MainWindow : Window
         Closing += (_, e) =>
         {
             if (exiting) return;
-            if (tray?.IsAvailable == true) { e.Cancel = true; HideSafely(); }
+            if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown)
+            {
+                PrepareForShutdown();
+                return;
+            }
+            if (HasRecoveryIcon) { e.Cancel = true; HideSafely(); }
             else
             {
                 // Let this close finish instead of recursively calling Close
                 // from inside Closing when no recovery icon is available.
-                exiting = true;
-                CaptureBounds(); Persist(); settingsWindow?.Close();
+                PrepareForShutdown();
                 Dispatcher.UIThread.Post(() =>
                 {
                     if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown();
@@ -98,6 +104,17 @@ public partial class MainWindow : Window
         if (!opened || applyingBounds || WindowState != WindowState.Normal) return;
         CaptureBounds();
         ScheduleSave();
+    }
+    private async Task VerifyAgentAndExitAsync()
+    {
+        var exitCode = 0;
+        try
+        {
+            await ViewModel.VerifyAgentAsync().ConfigureAwait(false);
+            await Task.Delay(1000).ConfigureAwait(false);
+        }
+        catch (Exception ex) { store.Log(ex); Console.Error.WriteLine(ex); exitCode = 1; }
+        Dispatcher.UIThread.Post(() => ExitWithCode(exitCode));
     }
     private void ScreensChanged(object? sender, EventArgs e)
     {
@@ -131,7 +148,7 @@ public partial class MainWindow : Window
     {
         if (!opened || smokeTest) return;
         var enabled = ViewModel.Floating && ViewModel.ClickThrough;
-        if (enabled && tray?.IsAvailable != true)
+        if (enabled && !HasRecoveryIcon)
         {
             ViewModel.ClickThrough = false;
             ViewModel.Status = "復帰用のメニューバーアイコンが利用できないため、クリック透過は有効にできません。";
@@ -181,7 +198,7 @@ public partial class MainWindow : Window
     }
     private void HideSafely()
     {
-        if (tray?.IsAvailable != true) { Exit(); return; }
+        if (!HasRecoveryIcon) { Exit(); return; }
         CaptureBounds(); Persist(); Hide();
     }
     public void ReturnToNormal() { ShowAccessible(); ViewModel.Floating = false; }
@@ -210,10 +227,16 @@ public partial class MainWindow : Window
     private void MinimizeWindow(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void ExitApplication(object? sender, RoutedEventArgs e) => Exit();
     public void Exit() => ExitWithCode(0);
+    public void PrepareForShutdown()
+    {
+        if (exiting) return;
+        exiting = true;
+        CaptureBounds(); Persist(); settingsWindow?.Close();
+    }
     public void ExitWithCode(int exitCode)
     {
         if (exiting) return;
-        exiting = true; CaptureBounds(); Persist(); settingsWindow?.Close(); Close();
+        PrepareForShutdown(); Close();
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown(exitCode);
     }
 }

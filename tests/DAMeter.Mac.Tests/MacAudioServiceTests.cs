@@ -15,6 +15,45 @@ namespace DAMeter.Mac.Tests;
 public sealed class MacAudioServiceTests
 {
     [UnixAudioFact]
+    public async Task AgentProbeUsesItsOwnIdentityInsteadOfFinderParentIdentity()
+    {
+        using var helper = new TestHelper("""
+if sys.argv[1:] != ["--agent-check"]:
+    sys.exit(78)
+for key in ["__CFBundleIdentifier", "__CFBundleIdentifierOverride", "CFProcessPath"]:
+    if key in os.environ:
+        sys.stderr.write("ERROR: Inherited parent identity\n")
+        sys.exit(78)
+sys.stderr.write("STATUS: bundle=org.atstti.DAMeter.AudioCapture activationPolicy=accessory\n")
+sys.stderr.flush()
+""");
+        string[] keys = ["__CFBundleIdentifier", "__CFBundleIdentifierOverride", "CFProcessPath"];
+        var previous = keys.Select(Environment.GetEnvironmentVariable).ToArray();
+        try
+        {
+            foreach (var key in keys) Environment.SetEnvironmentVariable(key, "org.atstti.DAMeter");
+            using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+            await service.VerifyAgentAsync();
+            Assert.Equal(AudioLevels.Silence, service.DrainLevels());
+        }
+        finally
+        {
+            for (int index = 0; index < keys.Length; index++) Environment.SetEnvironmentVariable(keys[index], previous[index]);
+        }
+    }
+
+    [UnixAudioFact]
+    public async Task AgentProbeRejectsASecondRegularApplicationIdentity()
+    {
+        using var helper = new TestHelper("""
+sys.stderr.write("STATUS: bundle=org.atstti.DAMeter activationPolicy=regular\n")
+sys.stderr.flush()
+""");
+        using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.VerifyAgentAsync());
+    }
+
+    [UnixAudioFact]
     public async Task ReadsStereoPcmAndExpiresMeasurementsWhenPacketsStop()
     {
         using var helper = new TestHelper("""
@@ -92,6 +131,27 @@ sys.exit(77)
     }
 
     [UnixAudioFact]
+    public async Task InvalidAgentBundlePausesAutomaticRestartUntilExplicitRetry()
+    {
+        using var helper = new TestHelper("""
+event("start")
+sys.stderr.write("ERROR: Invalid capture-agent bundle\n")
+sys.stderr.flush()
+sys.exit(78)
+""");
+        var statuses = new ConcurrentQueue<string>();
+        using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+        service.StatusChanged += statuses.Enqueue;
+        service.Start();
+        await WaitUntilAsync(() => statuses.Any(message => message.Contains("アプリ構成", StringComparison.Ordinal)));
+        await Task.Delay(TimeSpan.FromMilliseconds(2300));
+        Assert.Equal(1, helper.CountEvents("start"));
+        Assert.Equal(AudioLevels.Silence, service.DrainLevels());
+        service.Retry();
+        await WaitUntilAsync(() => helper.CountEvents("start") == 2);
+    }
+
+    [UnixAudioFact]
     public async Task MissingHelperCanBeInstalledAndStartedWithExplicitRetry()
     {
         using var helper = new TestHelper(body: null);
@@ -133,6 +193,25 @@ event("stop")
         Assert.Equal(AudioLevels.Silence, service.DrainLevels());
         await WaitUntilAsync(() => helper.CountEvents("start") == 2 && service.DrainLevels().LeftPeak == 1);
         Assert.Contains(errors, exception => exception is InvalidDataException);
+    }
+
+    [UnixAudioFact]
+    public async Task StopBeforeFirstAudioPacketTerminatesAnUnresponsivePermissionWait()
+    {
+        using var helper = new TestHelper("""
+event(str(os.getpid()))
+while True:
+    time.sleep(0.05)
+""");
+        using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+        service.Start();
+        await WaitUntilAsync(() => helper.Events.Length == 1);
+        var processId = int.Parse(Assert.Single(helper.Events));
+        var elapsed = Stopwatch.StartNew();
+        service.Stop();
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(6), "A helper waiting before its first packet blocked shutdown.");
+        Assert.True(ProcessExited(processId));
+        Assert.Equal(AudioLevels.Silence, service.DrainLevels());
     }
 
     [UnixAudioFact]

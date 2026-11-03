@@ -65,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private void OnStatus(string message) => Dispatcher.UIThread.Post(() => { if (!disposed) Status = message; });
     public void Save() => store.Save(Settings);
+    public Task VerifyAgentAsync() => audio.VerifyAgentAsync();
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     public void Dispose()
     {

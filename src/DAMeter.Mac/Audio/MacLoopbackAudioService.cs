@@ -63,6 +63,33 @@ public sealed class MacLoopbackAudioService : IDisposable
         }
     }
 
+    /// <summary>Permission-free packaged-agent identity check used by Mac CI.</summary>
+    public async Task VerifyAgentAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        using var process = CreateHelperProcess("--agent-check");
+        if (!process.Start()) throw new IOException("The capture-agent identity check did not start.");
+        var diagnostics = process.StandardError.ReadToEndAsync(timeout.Token);
+        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            var text = await diagnostics.WaitAsync(timeout.Token).ConfigureAwait(false);
+            if (process.ExitCode != 0 || !text.Contains("bundle=org.atstti.DAMeter.AudioCapture", StringComparison.Ordinal) ||
+                !text.Contains("activationPolicy=accessory", StringComparison.Ordinal) ||
+                (await output.WaitAsync(timeout.Token).ConfigureAwait(false)).Length != 0)
+                throw new InvalidOperationException($"The packaged capture agent has an invalid identity: {text.Trim()}");
+        }
+        finally
+        {
+            timeout.Cancel();
+            await StopHelperAsync(process).ConfigureAwait(false);
+            await ObserveTaskAsync(Task.WhenAll(diagnostics, output)).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Aggregates callback frames and retains measurements for at most 150 ms.</summary>
     public AudioLevels DrainLevels()
     {
@@ -136,6 +163,12 @@ public sealed class MacLoopbackAudioService : IDisposable
                         await retrySignal.WaitAsync(stop).ConfigureAwait(false);
                         continue;
                     }
+                    if (outcome.ExitCode == 78)
+                    {
+                        PublishStatus("音声ヘルパーのアプリ構成が不正です。最新版を再インストールし、再接続してください。");
+                        await retrySignal.WaitAsync(stop).ConfigureAwait(false);
+                        continue;
+                    }
                     PublishStatus("音声取得が停止しました。自動的に再接続します。");
                 }
                 catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
@@ -168,18 +201,7 @@ public sealed class MacLoopbackAudioService : IDisposable
 
     private async Task<(int ExitCode, bool RestartRequested)> RunCaptureSessionAsync(CancellationToken stop)
     {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo(helperPath)
-            {
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardErrorEncoding = Encoding.UTF8,
-                CreateNoWindow = true
-            }
-        };
+        using var process = CreateHelperProcess();
         using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(stop);
         if (!process.Start()) throw new IOException("The macOS capture helper did not start.");
         process.StandardInput.AutoFlush = true;
@@ -204,15 +226,31 @@ public sealed class MacLoopbackAudioService : IDisposable
             // session from consuming the next user's explicit retry request.
             sessionCancellation.Cancel();
             await StopHelperAsync(process).ConfigureAwait(false);
-            await ObserveTaskAsync(frames).ConfigureAwait(false);
-            await ObserveTaskAsync(errors).ConfigureAwait(false);
-            await ObserveTaskAsync(exited).ConfigureAwait(false);
-            await ObserveTaskAsync(retry).ConfigureAwait(false);
-            await ObserveTaskAsync(stopped).ConfigureAwait(false);
+            await ObserveTaskAsync(Task.WhenAll(frames, errors, exited, retry, stopped)).ConfigureAwait(false);
             ResetMeasurements();
         }
         restartRequested |= retry.IsCompletedSuccessfully;
         return (process.HasExited ? process.ExitCode : 1, restartRequested);
+    }
+
+    private Process CreateHelperProcess(params string[] arguments)
+    {
+        var info = new ProcessStartInfo(helperPath)
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardErrorEncoding = Encoding.UTF8,
+            CreateNoWindow = true
+        };
+        // Finder's parent-app identity must not override the agent's own bundle.
+        // Authentication, proxy and other inherited settings remain untouched.
+        info.Environment.Remove("__CFBundleIdentifier");
+        info.Environment.Remove("__CFBundleIdentifierOverride");
+        info.Environment.Remove("CFProcessPath");
+        foreach (var argument in arguments) info.ArgumentList.Add(argument);
+        return new Process { StartInfo = info };
     }
 
     private async Task ReadAudioAsync(Stream stream, CancellationToken cancellationToken)
@@ -252,22 +290,44 @@ public sealed class MacLoopbackAudioService : IDisposable
 
     private static async Task StopHelperAsync(Process process)
     {
-        if (process.HasExited) return;
         try
         {
-            await process.StandardInput.WriteLineAsync("stop").ConfigureAwait(false);
-            process.StandardInput.Close();
+            if (process.HasExited) return;
+            // A helper can be waiting in a macOS permission dialog. Neither a
+            // pipe write nor its eventual process exit may block shutdown forever.
+            using var writeTimeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+            try
+            {
+                await process.StandardInput.WriteLineAsync("stop".AsMemory(), writeTimeout.Token)
+                    .WaitAsync(writeTimeout.Token).ConfigureAwait(false);
+                process.StandardInput.BaseStream.Close();
+            }
+            catch (Exception exception) when (exception is IOException or InvalidOperationException or OperationCanceledException) { }
+            try
+            {
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                return;
+            }
+            catch (TimeoutException) { }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
+            catch (TimeoutException) { }
         }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or ObjectDisposedException) { }
-        try
+        finally
         {
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-            return;
+            // Another process may inherit a pipe handle. Explicitly close the
+            // parent ends even if the helper exited before cleanup began.
+            ClosePipe(process.StandardInput.BaseStream);
+            ClosePipe(process.StandardOutput.BaseStream);
+            ClosePipe(process.StandardError.BaseStream);
         }
-        catch (TimeoutException) { }
-        try { process.Kill(entireProcessTree: true); }
-        catch (InvalidOperationException) { }
-        await process.WaitForExitAsync().ConfigureAwait(false);
+    }
+
+    private static void ClosePipe(Stream stream)
+    {
+        try { stream.Dispose(); }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException) { }
     }
 
     private async Task WaitForRetryOrDelayAsync(CancellationToken stop)
@@ -277,7 +337,12 @@ public sealed class MacLoopbackAudioService : IDisposable
 
     private static async Task ObserveTaskAsync(Task task)
     {
-        try { await task.ConfigureAwait(false); }
+        try { await task.WaitAsync(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false); }
+        catch (TimeoutException)
+        {
+            _ = task.ContinueWith(t => { _ = t.Exception; }, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
         catch (OperationCanceledException) { }
         catch (IOException) { }
         catch (InvalidOperationException) { }
@@ -320,6 +385,14 @@ public sealed class MacLoopbackAudioService : IDisposable
 
     private static string ResolveBundledHelper()
     {
+        var appDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+        if (appDirectory.Name == "MacOS" && appDirectory.Parent?.Name == "Contents")
+        {
+            // A bare executable here would inherit the main app's identity in
+            // LaunchServices/TCC. Packaged apps must use the dedicated agent.
+            return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Helpers",
+                "DAMeter.AudioCapture.app", "Contents", "MacOS", "DAMeter.AudioCapture"));
+        }
         var besideApp = Path.Combine(AppContext.BaseDirectory, "DAMeter.AudioCapture");
         if (File.Exists(besideApp)) return besideApp;
         var helpersDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Helpers", "DAMeter.AudioCapture"));

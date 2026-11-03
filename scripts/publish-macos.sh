@@ -30,9 +30,12 @@ output="$root/artifacts/macos-$rid"
 app="$output/DAMeter.app"
 macos="$app/Contents/MacOS"
 resources="$app/Contents/Resources"
+helper_app="$app/Contents/Helpers/DAMeter.AudioCapture.app"
+helper_macos="$helper_app/Contents/MacOS"
+helper="$helper_macos/DAMeter.AudioCapture"
 # Delete only this script's own generated .app; unrelated artifacts are retained.
 rm -rf "$app"
-mkdir -p "$macos" "$resources" "$output"
+mkdir -p "$macos" "$resources" "$helper_macos" "$output"
 temporary="$(mktemp -d "${TMPDIR:-/tmp}/dameter-publish.XXXXXX")"
 trap 'rm -rf "$temporary"' EXIT
 
@@ -51,8 +54,30 @@ xcrun swiftc -parse-as-library -swift-version 5 -O \
     -framework ScreenCaptureKit -framework AVFoundation \
     -framework CoreMedia -framework CoreAudio -framework AudioToolbox -framework CoreGraphics -framework AppKit \
     native/DAMeter.AudioCapture/*.swift \
-    -o "$macos/DAMeter.AudioCapture"
-chmod 755 "$macos/DAMeter.Mac" "$macos/DAMeter.AudioCapture"
+    -o "$helper"
+chmod 755 "$macos/DAMeter.Mac" "$helper"
+
+# The capture agent must not inherit DAMeter.Mac's bundle identity or appear as
+# another regular application in the Dock. LSUIElement preserves permission
+# dialogs while the helper explicitly uses AppKit's accessory activation policy.
+cat > "$helper_app/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleName</key><string>DAMeter Audio Capture</string>
+    <key>CFBundleDisplayName</key><string>DAMeter 音声取得</string>
+    <key>CFBundleIdentifier</key><string>org.atstti.DAMeter.AudioCapture</string>
+    <key>CFBundleExecutable</key><string>DAMeter.AudioCapture</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>0.1.1</string>
+    <key>CFBundleShortVersionString</key><string>0.1.1</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSScreenCaptureUsageDescription</key><string>DAMeterでシステム音声のレベルを表示するために使用します。録画、録音、保存、送信は行いません。</string>
+    <key>NSAudioCaptureUsageDescription</key><string>再生中のシステム音声をDAMeterへ渡して解析します。マイクは使用しません。</string>
+</dict></plist>
+PLIST
+/usr/bin/plutil -lint "$helper_app/Contents/Info.plist"
 
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,8 +88,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>org.atstti.DAMeter</string>
     <key>CFBundleExecutable</key><string>DAMeter.Mac</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>0.1.0</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>0.1.1</string>
+    <key>CFBundleShortVersionString</key><string>0.1.1</string>
     <key>CFBundleIconFile</key><string>DAMeter.icns</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>NSHighResolutionCapable</key><true/>
@@ -133,19 +158,27 @@ while IFS= read -r -d '' binary; do
         *Mach-O*) /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$temporary/entitlements.plist" "$binary" ;;
     esac
 done < <(find "$macos" -type f -print0)
+# Seal the nested helper as a bundle first. The main bundle then records that
+# nested signature; signing the outer application first is insufficient.
+/usr/bin/codesign --force --sign - --timestamp=none "$helper_app"
+/usr/bin/codesign --verify --strict --verbose=2 "$helper_app"
 /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$temporary/entitlements.plist" "$app"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
 
 # --check never starts capture or requests Screen Recording permission.
 case "$rid:$(uname -m)" in
     osx-arm64:arm64|osx-x64:x86_64)
-        "$macos/DAMeter.AudioCapture" --check
-        "$macos/DAMeter.AudioCapture" --self-test
+        "$helper" --check
+        "$helper" --self-test
+        "$helper" --agent-check
         # Exercise Avalonia, its native libraries, and real window creation. The
         # application skips audio/tray/persistence and closes itself in this mode.
         python3 - "$macos/DAMeter.Mac" <<'PY'
-import subprocess, sys
-subprocess.run([sys.argv[1], '--smoke-test'], check=True, timeout=45)
+import os, subprocess, sys
+environment = os.environ.copy()
+environment['__CFBundleIdentifier'] = 'org.atstti.DAMeter'
+environment['CFProcessPath'] = sys.argv[1]
+subprocess.run([sys.argv[1], '--smoke-test'], env=environment, check=True, timeout=45)
 PY
         ;;
     *) echo 'Cross-built app: execution checks skipped for the other CPU architecture.' ;;

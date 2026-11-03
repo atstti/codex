@@ -1,3 +1,4 @@
+import AppKit
 import AudioToolbox
 import CoreGraphics
 import CoreMedia
@@ -14,6 +15,8 @@ private enum CaptureError: LocalizedError {
     case unsupportedFormat(String)
     case malformedBuffer
     case outputClosed(Int32)
+    case invalidAgentBundle
+    case agentActivationFailed
     case selfTestFailed(String)
 
     var errorDescription: String? {
@@ -28,6 +31,10 @@ private enum CaptureError: LocalizedError {
             return "システム音声バッファの形式またはサイズが不正です。"
         case .outputClosed(let code):
             return "音声解析プロセスへの接続が終了しました (errno \(code))。"
+        case .invalidAgentBundle:
+            return "音声ヘルパーの配置情報が不正です。DAMeter の修正版を再インストールしてください。"
+        case .agentActivationFailed:
+            return "音声ヘルパーをバックグラウンドモードで起動できませんでした。"
         case .selfTestFailed(let details):
             return "PCM self-test failed: \(details)"
         }
@@ -375,6 +382,27 @@ private final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
 @main
 private struct DAMeterAudioCapture {
+    /// A helper executable inside the main application's MacOS directory can be
+    /// attributed to the main app by LaunchServices. Its own UI-element bundle
+    /// gives it a distinct identity before AppKit or the permission API starts.
+    @MainActor
+    private static func configureAgent() throws {
+        let bundle = Bundle.main
+        guard bundle.bundleIdentifier == "org.atstti.DAMeter.AudioCapture",
+              bundle.object(forInfoDictionaryKey: "CFBundleExecutable") as? String == "DAMeter.AudioCapture",
+              bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool == true else {
+            throw CaptureError.invalidAgentBundle
+        }
+        let application = NSApplication.shared
+        if application.activationPolicy() != .accessory && !application.setActivationPolicy(.accessory) {
+            throw CaptureError.agentActivationFailed
+        }
+        guard application.activationPolicy() == .accessory else {
+            throw CaptureError.agentActivationFailed
+        }
+    }
+
+    @MainActor
     static func main() async {
         guard #available(macOS 13.0, *) else {
             diagnostic("ERROR: システム音声の取得には macOS 13 Ventura 以降が必要です。")
@@ -388,9 +416,24 @@ private struct DAMeterAudioCapture {
             diagnostic("STATUS: DAMeter.AudioCapture protocol=1 macOS13+ ScreenCaptureKit stereo-float32-le")
             Darwin.exit(0)
         }
+        if CommandLine.arguments == [CommandLine.arguments[0], "--agent-check"] {
+            do {
+                try configureAgent()
+                diagnostic("STATUS: bundle=org.atstti.DAMeter.AudioCapture executable=DAMeter.AudioCapture LSUIElement=true activationPolicy=accessory")
+                Darwin.exit(0)
+            } catch {
+                diagnostic("ERROR: \(error.localizedDescription)")
+                Darwin.exit(78)
+            }
+        }
         if CommandLine.arguments.count > 1 {
-            diagnostic("ERROR: Usage: DAMeter.AudioCapture [--check|--self-test]")
+            diagnostic("ERROR: Usage: DAMeter.AudioCapture [--check|--agent-check|--self-test]")
             Darwin.exit(64)
+        }
+        do { try configureAgent() }
+        catch {
+            diagnostic("ERROR: \(error.localizedDescription)")
+            Darwin.exit(78)
         }
         signal(SIGPIPE, SIG_IGN)
         let stopSignal = StopSignal()

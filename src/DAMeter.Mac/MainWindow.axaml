@@ -39,6 +39,7 @@
                 <CheckBox Content="最前面" IsChecked="{Binding Topmost}" VerticalAlignment="Center" Margin="8" />
                 <Button Content="浮動表示" Command="{Binding ToggleFloatingCommand}" Margin="3" />
                 <Button Content="設定" Command="{Binding SettingsCommand}" Margin="3" />
+                <Button Content="終了" Click="ExitApplication" Margin="3" />
             </WrapPanel>
             <controls:MeterDisplay x:Name="Meter" Grid.Row="2" Margin="8" PointerPressed="DragWindow" />
             <TextBlock Grid.Row="3" Text="{Binding Status}" Foreground="#A6B7C8" Margin="20,8,30,14"
