@@ -15,6 +15,18 @@ namespace DAMeter.Mac.Tests;
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
+    public void PermissionButtonUsesTheViewModelActionWithoutOpeningSettingsDuringTests()
+    {
+        using var fixture = new WindowFixture();
+        int requested = 0;
+        fixture.Window.ViewModel.OpenPermissionsRequested += () => requested++;
+        Button button = FindButton(fixture.Window, "権限設定");
+        Assert.Same(fixture.Window.ViewModel.OpenPermissionsCommand, button.Command);
+        Click(fixture.Window, button);
+        Assert.Equal(1, requested);
+    }
+
+    [AvaloniaFact]
     public void ExitButtonClosesTheApplicationWindow()
     {
         using var fixture = new WindowFixture();

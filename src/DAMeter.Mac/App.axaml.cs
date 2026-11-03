@@ -11,6 +11,10 @@ namespace DAMeter.Mac;
 public partial class App : Application
 {
     private readonly SettingsStore store = new();
+    // Avalonia.Native reads Application.Name after application setup to name
+    // the standard macOS application menu and NSProcessInfo process title.
+    public App() => Name = "DAMeter";
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
     public override void OnFrameworkInitializationCompleted()
     {

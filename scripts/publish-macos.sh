@@ -69,8 +69,8 @@ cat > "$helper_app/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>org.atstti.DAMeter.AudioCapture</string>
     <key>CFBundleExecutable</key><string>DAMeter.AudioCapture</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>0.1.1</string>
-    <key>CFBundleShortVersionString</key><string>0.1.1</string>
+    <key>CFBundleVersion</key><string>0.1.2</string>
+    <key>CFBundleShortVersionString</key><string>0.1.2</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSUIElement</key><true/>
     <key>NSScreenCaptureUsageDescription</key><string>DAMeterでシステム音声のレベルを表示するために使用します。録画、録音、保存、送信は行いません。</string>
@@ -88,8 +88,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>org.atstti.DAMeter</string>
     <key>CFBundleExecutable</key><string>DAMeter.Mac</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>0.1.1</string>
-    <key>CFBundleShortVersionString</key><string>0.1.1</string>
+    <key>CFBundleVersion</key><string>0.1.2</string>
+    <key>CFBundleShortVersionString</key><string>0.1.2</string>
     <key>CFBundleIconFile</key><string>DAMeter.icns</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>NSHighResolutionCapable</key><true/>

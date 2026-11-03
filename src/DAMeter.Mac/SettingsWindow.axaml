@@ -20,6 +20,7 @@
             <TextBlock Text="{Binding VuReferenceDb, StringFormat={}{0:F0} dBFS}" />
             <TextBlock Text="VU は約300ms応答の RMS ベースの近似表示です。厳密な規格準拠ではありません。" TextWrapping="Wrap" Foreground="#A6B7C8" />
             <TextBlock Text="音声取得には macOS の『画面収録／画面とシステムオーディオ収録』の許可が必要です。許可後にアプリを再起動してください。画面フレームと音声をファイル保存する処理はありません。" TextWrapping="Wrap" Foreground="#A6B7C8" />
+            <Button Content="macOSの権限設定を開く" Command="{Binding OpenPermissionsCommand}" HorizontalAlignment="Left" />
             <TextBlock Text="クリック透過はメニューバーの DAMeter メニューから解除できます。" TextWrapping="Wrap" Foreground="#A6B7C8" />
             <Button Content="閉じる" HorizontalAlignment="Right" Click="CloseSettings" />
         </StackPanel>

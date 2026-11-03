@@ -15,6 +15,48 @@ namespace DAMeter.Mac.Tests;
 public sealed class MacAudioServiceTests
 {
     [UnixAudioFact]
+    public async Task DigitalSilenceIsReportedAsReceivedDataRatherThanMissingPermission()
+    {
+        using var helper = new TestHelper("""
+event("start")
+stopped = threading.Event()
+threading.Thread(target=lambda: (sys.stdin.readline(), stopped.set()), daemon=True).start()
+while not stopped.is_set():
+    sys.stdout.buffer.write(struct.pack("<Iffff", 16, 0, 0, 0, 0))
+    sys.stdout.buffer.flush()
+    time.sleep(0.025)
+""");
+        var statuses = new ConcurrentQueue<string>();
+        using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+        service.StatusChanged += statuses.Enqueue;
+        service.Start();
+        await WaitUntilAsync(() => statuses.Any(message => message.Contains("無音", StringComparison.Ordinal)));
+        Assert.Equal(AudioLevels.Silence, service.DrainLevels());
+        Assert.DoesNotContain(statuses, message => message.Contains("許可を確認", StringComparison.Ordinal));
+    }
+
+    [UnixAudioFact]
+    public async Task DelayedNativeStartupStatusDoesNotHideMeasuredAudioReception()
+    {
+        using var helper = new TestHelper("""
+for index in range(20):
+    send_packet()
+    time.sleep(0.025)
+sys.stderr.write("STATUS: 最初の音声データを待っています。\n")
+sys.stderr.flush()
+event("late-status")
+stream_until_stopped()
+""");
+        var statuses = new ConcurrentQueue<string>();
+        using var service = new MacLoopbackAudioService(helperPath: helper.Path);
+        service.StatusChanged += statuses.Enqueue;
+        service.Start();
+        await WaitUntilAsync(() => helper.CountEvents("late-status") == 1 && service.DrainLevels().LeftPeak == 1);
+        await Task.Delay(100);
+        Assert.Contains("計測中", statuses.Last());
+    }
+
+    [UnixAudioFact]
     public async Task AgentProbeUsesItsOwnIdentityInsteadOfFinderParentIdentity()
     {
         using var helper = new TestHelper("""

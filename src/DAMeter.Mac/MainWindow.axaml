@@ -36,6 +36,7 @@
                 <Button Content="縦型ピーク" Command="{Binding SelectMeterCommand}" CommandParameter="VerticalPeak" Margin="3" />
                 <Button Content="アナログ VU" Command="{Binding SelectMeterCommand}" CommandParameter="AnalogVu" Margin="3" />
                 <Button Content="音声の再接続" Command="{Binding RetryCommand}" Margin="3" />
+                <Button Content="権限設定" Command="{Binding OpenPermissionsCommand}" Margin="3" />
                 <CheckBox Content="最前面" IsChecked="{Binding Topmost}" VerticalAlignment="Center" Margin="8" />
                 <Button Content="浮動表示" Command="{Binding ToggleFloatingCommand}" Margin="3" />
                 <Button Content="設定" Command="{Binding SettingsCommand}" Margin="3" />

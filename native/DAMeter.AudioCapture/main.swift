@@ -22,7 +22,7 @@ private enum CaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionRequired:
-            return "システム設定の「プライバシーとセキュリティ」→「画面収録」（または「画面とシステムオーディオの収録」）で DAMeter の権限を許可してください。必要なら DAMeter を終了・再起動し、再接続を押してください。"
+            return "macOS が音声キャプチャへのアクセスを拒否しました。許可が ON の場合も DAMeter を ⌘Q で完全終了して再起動してください。設定に「DAMeter 音声取得」が表示される場合は、その項目も確認してください。"
         case .noDisplay:
             return "音声キャプチャの基準となる画面が見つかりません。画面の接続後に再接続します。"
         case .unsupportedFormat(let details):
@@ -47,6 +47,19 @@ private func diagnostic(_ message: String) {
     if let data = line.data(using: .utf8) {
         try? FileHandle.standardError.write(contentsOf: data)
     }
+}
+
+/// Keep the API error identity so an existing permission grant can be
+/// distinguished from a capture configuration or audio-buffer failure.
+private func reportCaptureFailure(_ error: Error) -> Int32 {
+    let nativeError = error as NSError
+    let identity = "[domain=\(nativeError.domain), code=\(nativeError.code)]"
+    if nativeError.domain.contains("ScreenCaptureKit") && nativeError.code == -3801 {
+        diagnostic("ERROR: \(CaptureError.permissionRequired.localizedDescription) \(identity)")
+        return 77
+    }
+    diagnostic("ERROR: \(error.localizedDescription) \(identity)")
+    return 70
 }
 
 private enum StopReason {
@@ -320,14 +333,17 @@ private final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
     init(stopSignal: StopSignal) { self.stopSignal = stopSignal }
 
+    @MainActor
     func start() async throws {
-        if !CGPreflightScreenCaptureAccess() {
-            diagnostic("STATUS: システム音声の取得には macOS の画面収録権限が必要です。許可ダイアログを確認してください。")
-            guard CGRequestScreenCaptureAccess() else { throw CaptureError.permissionRequired }
-        }
+        // Let ScreenCaptureKit perform its own authorization. A separate
+        // CoreGraphics screen preflight can disagree with the permission used
+        // by the actual capture API, especially after a helper bundle update.
+        diagnostic("STATUS: macOS の音声キャプチャへのアクセスを確認しています。")
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else { throw CaptureError.noDisplay }
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // Match Apple's display/audio sample: include all applications rather
+        // than constructing a window-exclusion filter with an empty list.
+        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
         let configuration = SCStreamConfiguration()
         configuration.capturesAudio = true
         configuration.excludesCurrentProcessAudio = true
@@ -343,8 +359,9 @@ private final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         let session = SCStream(filter: filter, configuration: configuration, delegate: self)
         stream = session
         try session.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
+        diagnostic("STATUS: 音声ストリームを開始しています。")
         try await session.startCapture()
-        diagnostic("STATUS: システム音声を取得中です（48 kHz・ステレオ）。マイク入力は使用しません。")
+        diagnostic("STATUS: 音声ストリームを開始しました。最初の音声データを待っています。")
     }
 
     private func markStopping() {
@@ -353,6 +370,7 @@ private final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         stateLock.unlock()
     }
 
+    @MainActor
     func stop() async {
         markStopping()
         guard let session = stream else { return }
@@ -397,6 +415,13 @@ private struct DAMeterAudioCapture {
         if application.activationPolicy() != .accessory && !application.setActivationPolicy(.accessory) {
             throw CaptureError.agentActivationFailed
         }
+        guard application.activationPolicy() == .accessory else {
+            throw CaptureError.agentActivationFailed
+        }
+        // This helper uses Swift's async main loop instead of NSApplication.run.
+        // Complete AppKit/LaunchServices startup before requesting capture access.
+        // Accessory policy remains in force, so no regular Dock app is created.
+        application.finishLaunching()
         guard application.activationPolicy() == .accessory else {
             throw CaptureError.agentActivationFailed
         }
@@ -461,30 +486,10 @@ private struct DAMeterAudioCapture {
             try await capture.start()
             switch await stopSignal.wait() {
             case .requested: exitCode = 0
-            case .failed(let error):
-                let nativeError = error as NSError
-                if nativeError.domain.contains("ScreenCaptureKit") && nativeError.code == -3801 {
-                    diagnostic("ERROR: \(CaptureError.permissionRequired.localizedDescription)")
-                    exitCode = 77
-                } else {
-                    diagnostic("ERROR: \(error.localizedDescription)")
-                    exitCode = 70
-                }
+            case .failed(let error): exitCode = reportCaptureFailure(error)
             }
-        } catch CaptureError.permissionRequired {
-            diagnostic("ERROR: \(CaptureError.permissionRequired.localizedDescription)")
-            exitCode = 77
         } catch {
-            let nativeError = error as NSError
-            // ScreenCaptureKit's documented user-declined error can still arrive
-            // after a permission request (for example before the app restarts).
-            if nativeError.domain.contains("ScreenCaptureKit") && nativeError.code == -3801 {
-                diagnostic("ERROR: \(CaptureError.permissionRequired.localizedDescription)")
-                exitCode = 77
-            } else {
-                diagnostic("ERROR: \(error.localizedDescription)")
-                exitCode = 70
-            }
+            exitCode = reportCaptureFailure(error)
         }
         await capture.stop()
         sources.forEach { $0.cancel() }

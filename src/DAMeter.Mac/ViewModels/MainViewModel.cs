@@ -29,15 +29,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RetryCommand = new RelayCommand(_ => audio.Retry());
         ToggleFloatingCommand = new RelayCommand(_ => Floating = !Floating);
         SettingsCommand = new RelayCommand(_ => OpenSettingsRequested?.Invoke());
+        OpenPermissionsCommand = new RelayCommand(_ => OpenPermissionsRequested?.Invoke());
     }
     public AppSettings Settings { get; }
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action<MeterBallistics, MeterMode>? FrameReady;
     public event Action? OpenSettingsRequested;
+    public event Action? OpenPermissionsRequested;
     public ICommand SelectMeterCommand { get; }
     public ICommand RetryCommand { get; }
     public ICommand ToggleFloatingCommand { get; }
     public ICommand SettingsCommand { get; }
+    public ICommand OpenPermissionsCommand { get; }
     public string Status { get => status; set { status = value; Changed(); } }
     public MeterMode Meter { get => Settings.Meter; set { Settings.Meter = value; Changed(); } }
     public bool Floating { get => Settings.Floating; set { if (Settings.Floating == value) return; Settings.Floating = value; Changed(); Changed(nameof(Normal)); Changed(nameof(BackgroundOpacity)); } }

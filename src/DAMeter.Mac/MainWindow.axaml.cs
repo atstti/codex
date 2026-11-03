@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         Icon = new WindowIcon(Avalonia.Platform.AssetLoader.Open(new Uri("avares://DAMeter.Mac/Assets/dameter.png")));
         ViewModel.FrameReady += (state, mode) => { if (IsVisible) Meter.Update(state, mode); };
         ViewModel.OpenSettingsRequested += OpenSettings;
+        ViewModel.OpenPermissionsRequested += OpenPermissions;
         ViewModel.PropertyChanged += SettingsChanged;
         saveTimer.Tick += (_, _) => Persist();
         if (!smokeTest || (Program.SmokeTest && OperatingSystem.IsMacOS()))
@@ -226,6 +227,20 @@ public partial class MainWindow : Window
         settingsWindow = new SettingsWindow { DataContext = ViewModel };
         settingsWindow.Closed += (_, _) => { settingsWindow = null; Persist(); };
         settingsWindow.Show(this);
+    }
+    private void OpenPermissions()
+    {
+        if (smokeTest) return;
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            store.Log(ex);
+            ViewModel.Status = "システム設定の『プライバシーとセキュリティ』から収録の許可を確認してください。";
+        }
     }
     private void DragWindow(object? sender, PointerPressedEventArgs e)
     {

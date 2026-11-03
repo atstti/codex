@@ -159,7 +159,7 @@ public sealed class MacLoopbackAudioService : IDisposable
                     if (outcome.RestartRequested) continue;
                     if (outcome.ExitCode == 77)
                     {
-                        PublishStatus("画面・システム音声の収録権限が必要です。システム設定で許可し、「音声を再接続」を押してください。");
+                        PublishStatus("macOSの画面・システム音声の収録許可を確認してください。許可済みの場合も⌘Qで終了して起動し直してください。『権限設定』から確認できます。");
                         await retrySignal.WaitAsync(stop).ConfigureAwait(false);
                         continue;
                     }
@@ -255,13 +255,17 @@ public sealed class MacLoopbackAudioService : IDisposable
 
     private async Task ReadAudioAsync(Stream stream, CancellationToken cancellationToken)
     {
-        var receivedAudio = false;
+        bool? lastPublishedSignal = null;
+        long lastPublishedTimestamp = 0;
         while (await PcmFrameProtocol.ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is { } payload)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var levels = AudioSampleAnalyzer.Analyze(payload, 32, 2, SampleEncoding.IeeeFloat);
             var frames = payload.Length / (2 * sizeof(float));
+            bool wasStale;
             lock (samplesGate)
             {
+                wasStale = lastBufferTimestamp == 0 || Stopwatch.GetElapsedTime(lastBufferTimestamp).TotalSeconds >= 2;
                 leftPeak = Math.Max(leftPeak, levels.LeftPeak);
                 rightPeak = Math.Max(rightPeak, levels.RightPeak);
                 leftRms.Add(levels.LeftRms, frames);
@@ -269,10 +273,13 @@ public sealed class MacLoopbackAudioService : IDisposable
                 frameCount += frames;
                 lastBufferTimestamp = Stopwatch.GetTimestamp();
             }
-            if (!receivedAudio)
+            var hasSignal = levels.LeftPeak > 0 || levels.RightPeak > 0;
+            if (lastPublishedSignal is null || wasStale ||
+                (lastPublishedSignal != hasSignal && Stopwatch.GetElapsedTime(lastPublishedTimestamp).TotalSeconds >= 1))
             {
-                receivedAudio = true;
-                PublishStatus("システム音声を計測中（ScreenCaptureKit・ステレオ）");
+                lastPublishedSignal = hasSignal;
+                lastPublishedTimestamp = Stopwatch.GetTimestamp();
+                PublishStatus(hasSignal ? "システム音声を計測中（ScreenCaptureKit・ステレオ）" : "音声データを受信しています（現在は無音です）");
             }
         }
     }
@@ -281,8 +288,14 @@ public sealed class MacLoopbackAudioService : IDisposable
     {
         while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(line)) continue;
             var text = line.Length > 1000 ? line[..1000] : line;
+            // A delayed startup line must not overwrite real packet reception.
+            if (text.StartsWith("STATUS:", StringComparison.Ordinal))
+            {
+                lock (samplesGate) { if (lastBufferTimestamp != 0) continue; }
+            }
             PublishStatus(text.StartsWith("STATUS:", StringComparison.Ordinal) ? text[7..].Trim() : text);
             if (text.StartsWith("ERROR:", StringComparison.Ordinal)) SafeLog(new IOException(text));
         }
