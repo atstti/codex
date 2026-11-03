@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DAMeter.Mac.SettingsWindow" Title="DAMeter 設定" Width="470" Height="620"
+        MinWidth="390" MinHeight="400" WindowStartupLocation="CenterOwner" Background="#18222E"
+        Foreground="#EDF3F6" FontSize="14" ShowInTaskbar="False">
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="10">
+            <TextBlock Text="表示・応答の設定" FontSize="23" Margin="0,0,0,12" />
+            <CheckBox Content="常に最前面" IsChecked="{Binding Topmost}" />
+            <TextBlock Text="フローティング背景の不透明度（0～100%）" />
+            <Slider Minimum="0" Maximum="1" Value="{Binding FloatingBackgroundOpacity}" />
+            <TextBlock Text="{Binding FloatingBackgroundOpacity, StringFormat={}{0:P0}}" />
+            <TextBlock Text="ピークホールド（秒）" />
+            <Slider Minimum="0" Maximum="10" Value="{Binding PeakHoldSeconds}" />
+            <TextBlock Text="{Binding PeakHoldSeconds, StringFormat={}{0:F1} 秒}" />
+            <TextBlock Text="ピーク減衰速度（dB/秒）" />
+            <Slider Minimum="1" Maximum="120" Value="{Binding DecayDbPerSecond}" />
+            <TextBlock Text="{Binding DecayDbPerSecond, StringFormat={}{0:F0} dB/秒}" />
+            <TextBlock Text="VU基準（dBFS = 0 VU）" />
+            <Slider Minimum="-60" Maximum="0" Value="{Binding VuReferenceDb}" TickFrequency="1" IsSnapToTickEnabled="True" />
+            <TextBlock Text="{Binding VuReferenceDb, StringFormat={}{0:F0} dBFS}" />
+            <TextBlock Text="VU は約300ms応答の RMS ベースの近似表示です。厳密な規格準拠ではありません。" TextWrapping="Wrap" Foreground="#A6B7C8" />
+            <TextBlock Text="音声取得には macOS の『画面収録／画面とシステムオーディオ収録』の許可が必要です。許可後にアプリを再起動してください。画面フレームと音声をファイル保存する処理はありません。" TextWrapping="Wrap" Foreground="#A6B7C8" />
+            <TextBlock Text="クリック透過はメニューバーの DAMeter メニューから解除できます。" TextWrapping="Wrap" Foreground="#A6B7C8" />
+            <Button Content="閉じる" HorizontalAlignment="Right" Click="CloseSettings" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

@@ -1,5 +1,11 @@
 DAMeter third-party notices
 
+This source tree contains a Windows WPF application and a macOS Avalonia
+application. A platform-specific distribution includes the dependencies it
+uses; this inventory covers both applications. Full license texts are stored
+in licenses/ in the repository, beside the Windows executable when packaged,
+and in DAMeter.app/Contents/Resources/licenses/ for the Mac application.
+
 NAudio 2.2.1 and its component packages (NAudio.Core, NAudio.Wasapi,
 NAudio.WinMM, NAudio.Asio, NAudio.Midi, NAudio.WinForms)
 https://github.com/naudio/NAudio
@@ -26,7 +32,41 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-The self-contained executable includes Microsoft .NET and Windows Desktop
-runtime components. Microsoft copyright, MIT license and third-party notices
-are included in the accompanying dotnet-LICENSE.txt and
-dotnet-THIRD-PARTY-NOTICES.txt and windowsdesktop-LICENSE.txt files.
+Microsoft .NET 10.0.14 runtime (Windows and macOS)
+https://github.com/dotnet/runtime
+
+Self-contained distributions include Microsoft .NET runtime components.
+Microsoft copyright, MIT license, and third-party notices are included in
+dotnet-LICENSE.txt and dotnet-THIRD-PARTY-NOTICES.txt. The Windows WPF
+application additionally includes Windows Desktop runtime components; their
+license is included in windowsdesktop-LICENSE.txt.
+
+Avalonia 11.3.22 (Mac application)
+https://github.com/AvaloniaUI/Avalonia
+MIT license; full text: Avalonia-LICENSE.txt.
+Source package repository commit: 627ae9ef921621e27e7aa58df2796fbadb50af88.
+Includes Avalonia.Desktop, Themes.Fluent, Native, Skia, and the other Avalonia
+assemblies selected by the package graph.
+
+MicroCom.Runtime 0.11.0 (Mac application)
+https://github.com/kekekeks/MicroCom
+MIT license; full text: MicroCom-LICENSE.txt.
+
+SkiaSharp 2.88.9 and SkiaSharp.NativeAssets.macOS (Mac application)
+HarfBuzzSharp 8.3.1.1 and HarfBuzzSharp.NativeAssets.macOS (Mac application)
+https://github.com/mono/SkiaSharp
+
+MIT licenses: SkiaSharp-LICENSE.txt and HarfBuzzSharp-LICENSE.txt.
+The native macOS NuGet packages include identical, complete upstream notices
+for incorporated third-party material. They are preserved in
+SkiaSharp-HarfBuzzSharp-THIRD-PARTY-NOTICES.txt and include licenses and
+copyrights for Skia, HarfBuzz, font/text, codec, and other native components.
+
+Tmds.DBus.Protocol 0.21.3 (Avalonia dependency)
+https://github.com/tmds/Tmds.DBus
+MIT license; full text: Tmds.DBus-LICENSE.txt.
+Source package repository commit: 8cb04f66c330b64244e996ff68f685f27f7381a0.
+
+Apple system frameworks used by the Mac audio helper are supplied by macOS,
+not redistributed in the application. The helper's Swift source is part of
+DAMeter; it does not incorporate a third-party capture library.

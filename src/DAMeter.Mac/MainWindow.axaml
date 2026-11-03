@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:DAMeter.Mac.Controls" x:Class="DAMeter.Mac.MainWindow"
+        Title="DAMeter" Width="960" Height="640" MinWidth="420" MinHeight="300"
+        SystemDecorations="None" TransparencyLevelHint="Transparent" Background="Transparent"
+        CanResize="True" WindowStartupLocation="Manual" FontSize="13" Foreground="#EDF3F6">
+    <Grid>
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="横型ピーク" Command="{Binding SelectMeterCommand}" CommandParameter="HorizontalPeak" />
+                <MenuItem Header="縦型ピーク" Command="{Binding SelectMeterCommand}" CommandParameter="VerticalPeak" />
+                <MenuItem Header="アナログ VU" Command="{Binding SelectMeterCommand}" CommandParameter="AnalogVu" />
+                <Separator />
+                <MenuItem Header="フローティング表示" Click="ToggleFloating" />
+                <MenuItem Header="通常表示に戻す" Click="ReturnToNormal" />
+                <MenuItem Header="常に最前面 ON/OFF" Click="ToggleTopmost" />
+                <MenuItem Header="クリック透過 ON/OFF（解除はメニューバー）" Click="ToggleClickThrough" />
+                <MenuItem Header="設定" Command="{Binding SettingsCommand}" />
+                <MenuItem Header="終了" Click="ExitApplication" />
+            </ContextMenu>
+        </Grid.ContextMenu>
+        <Border x:Name="Backdrop" Background="#111923" CornerRadius="10" Opacity="{Binding BackgroundOpacity}" />
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <Grid ColumnDefinitions="*,Auto" Background="Transparent" PointerPressed="DragWindow" IsVisible="{Binding Normal}">
+                <StackPanel Orientation="Horizontal" Margin="20,15" Spacing="0">
+                    <TextBlock Text="DA" Foreground="#59E4B1" FontWeight="Bold" FontSize="23" />
+                    <TextBlock Text="Meter" FontSize="23" />
+                    <TextBlock Text="SYSTEM AUDIO · macOS" Margin="15,10,0,0" FontSize="10" Foreground="#97A9B9" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8" Spacing="6">
+                    <Button Content="—" Click="MinimizeWindow" ToolTip.Tip="最小化" />
+                    <Button Content="×" Click="HideWindow" ToolTip.Tip="メニューバーへ隠す。終了はメニューから" />
+                </StackPanel>
+            </Grid>
+            <WrapPanel Grid.Row="1" Margin="14,0,14,8" IsVisible="{Binding Normal}">
+                <Button Content="横型ピーク" Command="{Binding SelectMeterCommand}" CommandParameter="HorizontalPeak" Margin="3" />
+                <Button Content="縦型ピーク" Command="{Binding SelectMeterCommand}" CommandParameter="VerticalPeak" Margin="3" />
+                <Button Content="アナログ VU" Command="{Binding SelectMeterCommand}" CommandParameter="AnalogVu" Margin="3" />
+                <Button Content="音声の再接続" Command="{Binding RetryCommand}" Margin="3" />
+                <CheckBox Content="最前面" IsChecked="{Binding Topmost}" VerticalAlignment="Center" Margin="8" />
+                <Button Content="浮動表示" Command="{Binding ToggleFloatingCommand}" Margin="3" />
+                <Button Content="設定" Command="{Binding SettingsCommand}" Margin="3" />
+            </WrapPanel>
+            <controls:MeterDisplay x:Name="Meter" Grid.Row="2" Margin="8" PointerPressed="DragWindow" />
+            <TextBlock Grid.Row="3" Text="{Binding Status}" Foreground="#A6B7C8" Margin="20,8,30,14"
+                       TextWrapping="Wrap" IsVisible="{Binding Normal}" />
+        </Grid>
+        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="20" Height="20"
+                Background="#303F4D" Cursor="BottomRightCorner" PointerPressed="ResizeWindow" CornerRadius="0,0,8,0">
+            <TextBlock Text="◢" HorizontalAlignment="Center" Foreground="#A6B7C8" />
+        </Border>
+    </Grid>
+</Window>

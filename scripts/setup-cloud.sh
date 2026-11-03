@@ -18,5 +18,6 @@ if [[ ! -x "$DOTNET_ROOT/dotnet" ]] || [[ "$(dotnet --version)" != "$sdk_version
     tar -xzf "$sdk_archive" -C "$DOTNET_ROOT"
 fi
 dotnet restore DAMeter.slnx --locked-mode
-dotnet build DAMeter.slnx --configuration Release --no-restore --warnaserror
+dotnet build DAMeter.slnx --configuration Release --no-restore --warnaserror -m:2
 dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration Release --no-build
+dotnet test tests/DAMeter.Mac.Tests/DAMeter.Mac.Tests.csproj --configuration Release --no-build

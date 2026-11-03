@@ -1,5 +1,7 @@
 # DAMeter
 
+**Mac版を追加しました。** macOS 15以降の Apple Silicon / Intel 向けに、Avalonia と ScreenCaptureKit でシステム音声を取得します。Mac版の導入・権限・配布手順は [docs/MACOS.md](docs/MACOS.md) を参照してください。Windows版のWPF / WASAPIは維持しています。両版は音声解析と設定保存を共有します。
+
 Windows 10 / 11（64bit）で再生中のシステム音声を表示する、C# / .NET 10 / WPF のデスクトップ音声メーターです。NAudio の WASAPI Loopback で再生デバイスを取得します。マイク入力やデモ信号は使用しません。
 
 音声バッファはメモリ内で計算後に破棄します。音声の録音、ファイル保存、外部送信は行いません。保存するのは表示設定と例外ログです。

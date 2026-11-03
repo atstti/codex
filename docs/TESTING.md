@@ -1,5 +1,13 @@
 # DAMeter のテスト結果と Windows 受け入れ確認
 
+## Mac版の追加検証
+
+Mac版は共通Coreのパケット境界検証を17件追加し、Coreテストは46件です。Mac専用のUI・子プロセス通信テスト11件を `tests/DAMeter.Mac.Tests` に用意しています。音声ヘルパーにも、実際のPCM変換を対象とする権限不要の `--self-test` 9件を用意しています。
+
+LinuxではWindows・Mac・両テストプロジェクトを含むソリューションをReleaseでビルドし、警告0・エラー0を確認しています。Apple Silicon / Intel の自己完結型 .NET アプリのクロス発行も成功しています。Swift、`.app`の組み立て・署名検証、3種類の描画を通る起動チェックはmacOS CIで実行します。最新結果はGitHub Actionsの **Build macOS** で確認してください。
+
+MacのUI・音声パイプの自動テストは実デバイスを使いません。画面収録権限の許可・拒否、実際のシステム音声、クリック透過からの復帰、Retina／モニター切断は実機での受け入れ確認が必要です。Mac用の詳細は [MACOS.md](MACOS.md) を参照してください。
+
 ## この環境で実行したテスト
 
 実行環境: Linux x64、.NET SDK 10.0.403、.NET Runtime 10.0.14。

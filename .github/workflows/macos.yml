@@ -1,0 +1,69 @@
+name: Build macOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-build:
+    name: macOS (${{ matrix.rid }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            rid: osx-arm64
+          - runner: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Restore Mac application
+        run: dotnet restore src/DAMeter.Mac/DAMeter.Mac.csproj --locked-mode
+      - name: Build Mac application
+        run: dotnet build src/DAMeter.Mac/DAMeter.Mac.csproj --configuration Release --no-restore --warnaserror
+      - name: Restore shared tests
+        run: dotnet restore tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --locked-mode
+      - name: Test shared audio and settings
+        run: dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=core-tests.trx' --results-directory artifacts/test-results
+      - name: Restore Mac UI and transport tests
+        run: dotnet restore tests/DAMeter.Mac.Tests/DAMeter.Mac.Tests.csproj --locked-mode
+      - name: Test Mac UI bindings and helper lifecycle
+        run: dotnet test tests/DAMeter.Mac.Tests/DAMeter.Mac.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=mac-tests.trx' --results-directory artifacts/test-results
+      - name: Publish, verify signatures, and smoke test Mac application
+        run: |
+          status=0
+          bash scripts/publish-macos.sh '${{ matrix.rid }}' > artifacts/macos-publish.log 2>&1 || status=$?
+          cat artifacts/macos-publish.log
+          if [[ "$status" != 0 ]]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          text = '\n'.join(Path('artifacts/macos-publish.log').read_text(errors='replace').splitlines()[-35:])
+          text = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error title=Mac packaging failed::' + text)
+          PY
+          fi
+          exit "$status"
+      - name: Upload Mac distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: DAMeter-${{ matrix.rid }}
+          path: |
+            artifacts/macos-${{ matrix.rid }}/DAMeter-${{ matrix.rid }}.zip
+            artifacts/macos-${{ matrix.rid }}/DAMeter-${{ matrix.rid }}.dmg
+            artifacts/macos-${{ matrix.rid }}/SHA256SUMS.txt
+            artifacts/macos-${{ matrix.rid }}/BUILD-INFO.txt
+            artifacts/macos-${{ matrix.rid }}/README-ja.md
+            artifacts/macos-${{ matrix.rid }}/THIRD-PARTY-NOTICES.txt
+            artifacts/test-results/core-tests.trx
+            artifacts/test-results/mac-tests.trx
+          if-no-files-found: error
+          retention-days: 30
