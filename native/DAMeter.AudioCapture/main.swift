@@ -233,10 +233,10 @@ private enum PCMTransport {
         try expect(testPacket(bits: 64, flags: f32, channels: 1, bytesPerFrame: 8, frames: 3,
                               planes: [doubleBytes], planeChannels: [1]), samples: [0, 0, 0, 0, 0.5, 0.5])
         try expect(testPacket(bits: 8, flags: kAudioFormatFlagIsPacked, channels: 1, bytesPerFrame: 1, frames: 3,
-                              planes: [[0, 128, 255]], planeChannels: [1]), samples: [-1, -1, 0, 0, 127.0 / 128, 127.0 / 128])
+                              planes: [[0, 128, 255]], planeChannels: [1]), samples: [-1, -1, 0, 0, Float(127.0 / 128), Float(127.0 / 128)])
         try expect(testPacket(bits: 16, flags: signed, channels: 2, bytesPerFrame: 4, frames: 2,
                               planes: [[0, 0x40, 0, 0x80, 0, 0, 0xff, 0x7f]], planeChannels: [2]),
-                   samples: [0.5, -1, 0, 32_767.0 / 32_768])
+                   samples: [0.5, -1, 0, Float(32_767.0 / 32_768)])
         try expect(testPacket(bits: 24, flags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsAlignedHigh,
                               channels: 2, bytesPerFrame: 8, frames: 1,
                               planes: [[0, 0, 0, 0x40, 0, 0, 0, 0xc0]], planeChannels: [2]), samples: [0.5, -0.5])
