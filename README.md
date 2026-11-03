@@ -119,4 +119,4 @@ dotnet test tests/DAMeter.Core.Tests/DAMeter.Core.Tests.csproj --configuration R
 | `src/DAMeter/Platform` | トレイ、クリック透過、モニターとウィンドウ位置 |
 | `tests/DAMeter.Core.Tests` | xUnit による数値処理と設定保存の検証 |
 
-Linux / .NET SDK 10.0.403 で **Core 46件・Mac UI/通信11件、計57件成功、失敗0・スキップ0** を確認しました。Windowsと両Mac CPUのCIビルド・配布物生成、Macの権限不要の音声変換セルフテストと起動チェックも成功しています。実音声と手動操作の受け入れ確認は未実施です。詳細と受け入れチェックリストは [docs/TESTING.md](docs/TESTING.md) を参照してください。
+Linux / .NET SDK 10.0.403 で **Core 46件・Mac UI/通信20件、計66件成功、失敗0・スキップ0** を確認しました。Windowsと両Mac CPUのCIビルド・配布物生成、Macの権限不要の音声変換セルフテストと起動チェックも成功しています。実音声と手動操作の受け入れ確認は未実施です。詳細と受け入れチェックリストは [docs/TESTING.md](docs/TESTING.md) を参照してください。
