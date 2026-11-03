@@ -26,7 +26,7 @@ macOS のシステム音声を表示する Avalonia / .NET 10 アプリです。
 4. DMGを開いて `DAMeter.app` を「アプリケーション」へドラッグするか、アプリ入りZIPを展開してアプリを移動します。
 5. `DAMeter.app` を起動します。
 
-起動・終了を修正した0.1.1は [こちらの成功した実行](https://github.com/atstti/codex/actions/runs/41617181908) から取得できます。Apple Silicon版の [直接ダウンロード](https://github.com/atstti/codex/actions/runs/41617181908/artifacts/13222370132) も利用できます（GitHubログインが必要です）。Swiftコンパイル、C#テスト、署名検証、音声変換9件、権限不要の3表示起動チェックとZIP/DMG生成を確認しています。ユーザーの音声出力や権限ダイアログを使う実音声テストは別途必要です。
+起動・終了を修正した0.1.1は [こちらの成功した実行](https://github.com/atstti/codex/actions/runs/41618187095) から取得できます。Apple Silicon版の [直接ダウンロード](https://github.com/atstti/codex/actions/runs/41618187095/artifacts/13223345865) も利用できます（GitHubログインが必要です）。Swiftコンパイル、C#テスト、署名検証、音声変換9件、権限不要の3表示起動チェックとZIP/DMG生成を確認しています。ユーザーの音声出力や権限ダイアログを使う実音声テストは別途必要です。
 
 「このMacについて」で「チップ: Apple M…」と表示される場合は Apple Silicon、「プロセッサ: Intel…」と表示される場合は Intel です。
 
