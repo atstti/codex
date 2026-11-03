@@ -2,6 +2,8 @@
 
 ## 0.1.2：音声アクセスとアプリ名
 
+[0.1.2の配布ページ](https://github.com/atstti/codex/actions/runs/41622362194) と、[Apple Silicon版の直接ダウンロード](https://github.com/atstti/codex/actions/runs/41622362194/artifacts/13225115037) を利用できます。両CPUでビルド・署名・権限不要の起動／終了チェックに成功しています。実音声は更新後のMacで確認してください。
+
 メニューバーの既定名「Avalonia Application」を「DAMeter」へ修正しました。音声取得はCoreGraphicsによる別の事前判定を外し、実際に使うScreenCaptureKit自身のアクセス確認へ変更しています。macOSの許可を回避する処理ではありません。音声データの受信待ち・受信中・無音を区別し、通常画面と設定画面に「権限設定」を開くボタンを追加しました。
 
 許可がオンでも取得できない場合は、まず⌘Qで完全終了して起動し直してください。更新前の許可情報が残っている場合は、macOSの設定でDAMeterの許可を一度オフからオンにし直して再起動します。表示されるDAMeterまたは「DAMeter 音声取得」の項目を確認してください。
