@@ -23,7 +23,7 @@ public partial class App : Application
             // then close its windows. A tray-style window must not cancel this
             // request as though the user had only closed the meter window.
             desktop.ShutdownRequested += (_, _) => window.PrepareForShutdown();
-            if (!Program.SmokeTest)
+            if (!Program.SmokeTest || OperatingSystem.IsMacOS())
             {
                 var menu = new NativeMenu();
                 var restore = new NativeMenuItem("DAMeter を表示（クリック透過を解除）");

@@ -39,11 +39,13 @@ public partial class MainWindow : Window
         ViewModel.OpenSettingsRequested += OpenSettings;
         ViewModel.PropertyChanged += SettingsChanged;
         saveTimer.Tick += (_, _) => Persist();
-        if (!smokeTest)
+        if (!smokeTest || (Program.SmokeTest && OperatingSystem.IsMacOS()))
         {
             tray = new MacTrayService(Application.Current!, ShowAccessible, HideSafely, ReturnToNormal,
                 () => { ShowAccessible(); ViewModel.Floating = true; }, ToggleClickThrough,
                 () => ViewModel.Topmost = !ViewModel.Topmost, OpenSettings, Exit);
+            if (Program.SmokeTest && !tray.IsAvailable)
+                throw new InvalidOperationException("The native menu-bar recovery icon is unavailable during the quit smoke test.");
         }
         appliedFloating = settings.Floating;
         ApplyBounds(appliedFloating ? settings.FloatingBounds : settings.NormalBounds);
@@ -114,7 +116,21 @@ public partial class MainWindow : Window
             await Task.Delay(1000).ConfigureAwait(false);
         }
         catch (Exception ex) { store.Log(ex); Console.Error.WriteLine(ex); exitCode = 1; }
-        Dispatcher.UIThread.Post(() => ExitWithCode(exitCode));
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (exitCode == 0 && Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                // Exercise the same cancelable shutdown path as Dock Quit. In
+                // particular, the recovery icon must not turn Quit into Hide.
+                if (!desktop.TryShutdown())
+                {
+                    Console.Error.WriteLine("Native application shutdown was unexpectedly canceled.");
+                    PrepareForShutdown();
+                    desktop.Shutdown(1);
+                }
+            }
+            else ExitWithCode(exitCode);
+        });
     }
     private void ScreensChanged(object? sender, EventArgs e)
     {

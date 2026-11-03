@@ -172,7 +172,8 @@ case "$rid:$(uname -m)" in
         "$helper" --self-test
         "$helper" --agent-check
         # Exercise Avalonia, its native libraries, and real window creation. The
-        # application skips audio/tray/persistence and closes itself in this mode.
+        # application skips capture/persistence, probes the agent through the
+        # production launcher, and requests normal Quit with the native tray active.
         python3 - "$macos/DAMeter.Mac" <<'PY'
 import os, subprocess, sys
 environment = os.environ.copy()
