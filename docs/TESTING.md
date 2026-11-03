@@ -6,6 +6,8 @@ Core46件・Mac46件、計92件がLinuxで成功しました（失敗0・スキ�
 
 Mac CIではDAMeter本体へSwiftライブラリを読み込み、識別子が `org.atstti.DAMeter` であること、9件のPCM変換、署名、起動・終了を確認します。このチェックは収録権限を要求せず、実音声が取得できたことを意味しません。旧プロセス方式のテストは互換性記録として残していますが、製品の音声取得経路では使いません。
 
+コミット `4a17cab` の [Mac CI](https://github.com/atstti/codex/actions/runs/41649034815) では、Apple Silicon用のコンパイル・署名検証・本体プロセス内での識別子／PCM変換確認・起動／終了・ZIP／DMG生成が成功し、配布Artifactを作成しました。実機での音声取得と権限の再現確認は未実施です。
+
 ## Mac版0.1.2の検証
 
 LinuxでCore46件・Mac25件、計71件が成功し、失敗・スキップは0件です。 [0.1.2のMac CI](https://github.com/atstti/codex/actions/runs/41622362194) もApple Silicon／Intelの両方で成功しました。アプリ名がネイティブ初期化前からDAMeterであること、権限設定ボタンの操作、無音データ受信と権限待ちの区別、遅れて届く開始通知で実際の受信状態が上書きされないことを追加検証しました。全体Releaseビルドも警告0・エラー0です。
